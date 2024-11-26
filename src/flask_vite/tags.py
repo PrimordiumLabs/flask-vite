@@ -38,10 +38,22 @@ def make_static_tag():
 
 
 def make_debug_tag():
+    vite_entry_points = current_app.extensions["vite"].vite_entry_points
+    vite_dev_host = "http://localhost:5173"
+    
+    script_tags = '\n'.join(f"<script type='module' src='{vite_dev_host}/{src}'></script>" for src in vite_entry_points)
+    
     return dedent(
-        """
+        f"""
             <!-- FLASK_VITE_HEADER -->
-            <script type="module" src="http://localhost:3000/@vite/client"></script>
-            <script type="module" src="http://localhost:3000/main.js"></script>
+            <script type="module">
+                import RefreshRuntime from "{vite_dev_host}/@react-refresh"
+                RefreshRuntime.injectIntoGlobalHook(window)
+                window.$RefreshReg$ = () => {{}}
+                window.$RefreshSig$ = () => (type) => type
+                window.__vite_plugin_react_preamble_installed__ = true
+            </script>
+            <script type="module" src="{vite_dev_host}/@vite/client"></script>
+            {script_tags}
         """
     ).strip()
