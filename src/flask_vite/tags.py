@@ -35,6 +35,8 @@ def make_static_tag():
         if Path(js_file).name.startswith(entry)
     ]
     
+    # Enables flask-cdn support
+    url_for = current_app.jinja_env.globals["url_for"]
     script_tags = '\n'.join(f"<script type='module' src='{url_for('vite.static', filename=src)}'></script>" for src in entry_files)
 
     return dedent(
