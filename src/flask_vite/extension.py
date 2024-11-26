@@ -120,7 +120,7 @@ class Vite:
         filename,
         vite_routes_host: str | None = None,  # noqa: ARG002
     ):
-        dist = str(self._get_root() / "dist" / "assets")
+        dist = str(self._get_root() / "dist")
         return send_from_directory(dist, filename, max_age=ONE_YEAR)
 
     def _get_root(self) -> Path:
