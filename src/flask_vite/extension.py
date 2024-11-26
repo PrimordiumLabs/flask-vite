@@ -26,10 +26,12 @@ class Vite:
     app: Flask | None = None
     npm: NPM | None = None
     vite_folder_path: str = "vite"
+    vite_entry_points: list[str] = []
 
-    def __init__(self, app: Flask | None = None, vite_routes_host: str | None = None):
+    def __init__(self, app: Flask | None = None, vite_routes_host: str | None = None, vite_entry_points: list[str] = []):
         self.app = app
         self.vite_routes_host = vite_routes_host
+        self.vite_entry_points = vite_entry_points
 
         if app is not None:
             self.init_app(app, vite_routes_host=vite_routes_host)
