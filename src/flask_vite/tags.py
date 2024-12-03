@@ -14,7 +14,7 @@ from markupsafe import Markup
 
 
 def make_tag(*, static: bool = False):
-    if static or not current_app.debug:
+    if static or current_app.config['VITE_STATIC_TAG']:
         tag = make_static_tag()
     else:
         tag = make_debug_tag()
