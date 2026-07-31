@@ -108,9 +108,8 @@ want — an entry point is named by its filename without the extension:
 {{ vite_tags("reactIslands", "csvParse") }}  {# these two, in this order #}
 ```
 
-Passing a name that wasn't declared raises `ViteError`. If a declared entry
-point has no built asset in `vite/dist/assets`, the tag is skipped and an error
-is logged, so a stale build degrades one page instead of erroring the whole app.
+Passing a name that wasn't declared, or a declared entry point with no built
+asset in `vite/dist/assets`, raises `ViteError`.
 
 In dev, the react-refresh preamble and `@vite/client` are emitted at most once
 per request, so calling `vite_tags()` several times on one page is safe.

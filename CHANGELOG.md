@@ -7,14 +7,13 @@ All notable changes to this project will be documented in this file.
 ### <!-- 0 -->🚀 Features
 
 - Select entry points per template: `vite_tags("reactIslands")`. No arguments still emits every declared entry point.
-- `vite_tags()` raises `ViteError` on an undeclared entry point name.
+- `vite_tags()` raises `ViteError` on an undeclared entry point name, or when a declared entry point has no built asset.
 
 ### <!-- 1 -->🐛 Bug Fixes
 
 - Match built assets as `{name}-{hash}.js` instead of by prefix, so an entry point named `csv` no longer pulls in `csvParse`.
 - Default `VITE_STATIC_TAG` to `False`; reading it previously raised `KeyError` when unset.
 - Emit the react-refresh preamble at most once per request.
-- Log an error instead of silently emitting nothing when an entry point has no built asset.
 
 ### <!-- 2 -->🚜 Refactor
 

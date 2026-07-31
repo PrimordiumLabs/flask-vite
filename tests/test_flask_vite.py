@@ -165,16 +165,14 @@ def test_static_tag_preserves_requested_order_and_dedupes(mocker):
     assert tag.index("csvParse-BBB222") < tag.index("reactIslands-AAA111")
 
 
-def test_static_tag_logs_when_an_entry_point_was_never_built(mocker):
+def test_static_tag_raises_when_an_entry_point_was_never_built(mocker):
     app = make_app(VITE_STATIC_TAG=True)
     mocker.patch("glob.glob", return_value=[])
-    logger = mocker.patch.object(app, "logger")
 
-    with app.test_request_context():
-        tag = app.jinja_env.globals["vite_tags"]("reactIslands")
+    with app.test_request_context(), pytest.raises(ViteError) as e:
+        app.jinja_env.globals["vite_tags"]("reactIslands")
 
-    assert "<script" not in tag
-    assert logger.error.called
+    assert "No built asset found for vite entry point 'reactIslands'" in str(e.value)
 
 
 def test_unknown_entry_point_raises():

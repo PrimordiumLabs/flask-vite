@@ -27,10 +27,12 @@ ENTRY_FILE_TEMPLATE = r"{name}(-[\w-]+)?\.js"
 def make_tag(*entry_points: str, static: bool = False):
     """Script tags for the named entry points, or for all of them if none are given.
 
-    ``vite_tags()`` emits every entry point declared on the extension, while
-    ``vite_tags("reactIslands")`` emits just that one, so a page only pays for
-    the bundles it actually uses. Names are the entry point filenames without
-    their extension: ``"reactIslands.tsx"`` is selected as ``"reactIslands"``.
+    Args:
+        entry_points: The entry points to emit.
+        static: Whether to emit static tags.
+
+    Returns:
+        Markup: HTML-safe string containing <script> tags for the selected entry points.
     """
     selected = _select_entry_points(entry_points)
 
@@ -42,7 +44,18 @@ def make_tag(*entry_points: str, static: bool = False):
 
 
 def _select_entry_points(entry_points: tuple[str, ...]) -> dict[str, str]:
-    """Map the requested names to their source paths, in the order requested."""
+    """
+    Map the requested entry point names to their source paths, preserving the order requested.
+
+    Args:
+        entry_points: Tuple of entry point names to select.
+
+    Returns:
+        dict[str, str]: Mapping from entry point names to their declared source paths.
+
+    Raises:
+        ViteError: If any requested entry point name is not declared.
+    """
     declared = current_app.extensions["vite"].vite_entry_points
 
     if not entry_points:
@@ -76,11 +89,9 @@ def make_static_tag(selected: dict[str, str]) -> str:
         pattern = re.compile(ENTRY_FILE_TEMPLATE.format(name=re.escape(name)))
         matches = sorted(f for f in built_files if pattern.fullmatch(f))
         if not matches:
-            # A page rendering without its JS beats every page 500ing on a bad build.
-            current_app.logger.error(
-                "No built asset found for vite entry point %r in %s/dist/assets",
-                name,
-                vite_folder_path,
+            raise ViteError(
+                f"No built asset found for vite entry point {name!r} in "
+                f"{vite_folder_path}/dist/assets. Did you forget to run the Vite build?"
             )
         script_tags += [
             f"<script type='module' src='{url_for('vite.static', filename=src)}'></script>"
