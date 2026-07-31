@@ -83,9 +83,37 @@ You should now see files like `/vite/dist/assets/index-f16ca036.js`.
 - Manages a `vite` directory where you put your front-end source code.
 - Auto-injects vite-generated assets into your HTML pages (if `VITE_AUTO_INSERT` is set in the Flask config).
 - Use `{{ vite_tags() }}` in your Jinja templates otherwise.
+- Supports multiple entry points, selectable per template — see [Multiple entry points](#multiple-entry-points).
 - If you run Flask in `host_matching` mode, you can tell Vite which host to mount its own views on. You can configure this when instantiating Vite or when calling `init_app`:
   - Pass `vite_routes_host` the specific single host to serve its assets from.
   - Pass `vite_routes_host` as the wildcard value `*` to serve vite assets from the same domain as the current request.
+
+
+## Multiple entry points
+
+Declare your entry points, by source filename, when instantiating Vite. They
+should match the `build.rollupOptions.input` keys in your `vite.config.ts`:
+
+```python
+vite = Vite(vite_entry_points=["reactIslands.tsx", "csvParse.ts"])
+vite.init_app(app)
+```
+
+`{{ vite_tags() }}` emits a `<script type="module">` for every declared entry
+point. To keep a page from downloading bundles it doesn't use, name the ones you
+want — an entry point is named by its filename without the extension:
+
+```jinja
+{{ vite_tags("reactIslands") }}              {# just this one #}
+{{ vite_tags("reactIslands", "csvParse") }}  {# these two, in this order #}
+```
+
+Passing a name that wasn't declared raises `ViteError`. If a declared entry
+point has no built asset in `vite/dist/assets`, the tag is skipped and an error
+is logged, so a stale build degrades one page instead of erroring the whole app.
+
+In dev, the react-refresh preamble and `@vite/client` are emitted at most once
+per request, so calling `vite_tags()` several times on one page is safe.
 
 
 ## Configuration
@@ -95,6 +123,7 @@ The following (Flask) configuration variables are available:
 - `VITE_AUTO_INSERT`: if set, the extension will auto-insert the Vite assets into your HTML pages.
 - `VITE_NPM_BIN_PATH`: path to the `npm` binary. Defaults to `npm`.
 - `VITE_FOLDER_PATH`: path for the vite project. Defaults to `vite` locally.
+- `VITE_STATIC_TAG`: if set, emit tags for the built assets in `vite/dist/assets` rather than for the Vite dev server. Defaults to `False`.
 
 
 ## Demo
