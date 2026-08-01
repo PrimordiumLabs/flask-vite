@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from .errors import ViteError
 from .extension import Vite
 
-__all__ = ["Vite"]
+__all__ = ["Vite", "ViteError"]

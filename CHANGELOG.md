@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-07-31
+
+### <!-- 0 -->🚀 Features
+
+- Select entry points per template: `vite_tags("reactIslands")`. No arguments still emits every declared entry point.
+- `vite_tags()` raises `ViteError` on an undeclared entry point name, or when a declared entry point has no built asset.
+
+### <!-- 1 -->🐛 Bug Fixes
+
+- Match built assets as `{name}-{hash}.js` instead of by prefix, so an entry point named `csv` no longer pulls in `csvParse`.
+- Default `VITE_STATIC_TAG` to `False`; reading it previously raised `KeyError` when unset.
+- Emit the react-refresh preamble at most once per request.
+
+### <!-- 2 -->🚜 Refactor
+
+- `Vite.vite_entry_points` is now a `{name: source}` dict, built from the list passed to `Vite()`.
+- Move `ViteError` to `flask_vite.errors` (still re-exported from `flask_vite` and `flask_vite.extension`).
+- Replace mutable default arguments with immutable ones.
+
 ## [0.5.1] - 2024-07-16
 
 ### <!-- 1 -->🐛 Bug Fixes

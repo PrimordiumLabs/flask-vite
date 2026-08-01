@@ -8,30 +8,42 @@ from __future__ import annotations
 import os
 from http.client import OK
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from flask import Flask, Response, request, send_from_directory
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+from .errors import ViteError
 from .npm import NPM
 from .tags import make_tag
 
 ONE_YEAR = 60 * 60 * 24 * 365
 VITE_ROUTES_HOST_WILDCARD_VARIABLE = "<vite_routes_host>"
 
-
-class ViteError(ValueError):
-    pass
+__all__ = ["Vite", "ViteError"]
 
 
 class Vite:
     app: Flask | None = None
     npm: NPM | None = None
     vite_folder_path: str = "vite"
-    vite_entry_points: list[str] = []
+    # Maps each entry point's name to its source path, e.g.
+    # {"reactIslands": "reactIslands.tsx"}. Templates select by name.
+    vite_entry_points: dict[str, str] = {}
 
-    def __init__(self, app: Flask | None = None, vite_routes_host: str | None = None, vite_entry_points: list[str] = []):
+    def __init__(
+        self,
+        app: Flask | None = None,
+        vite_routes_host: str | None = None,
+        vite_entry_points: Iterable[str] = (),
+    ):
         self.app = app
         self.vite_routes_host = vite_routes_host
-        self.vite_entry_points = vite_entry_points
+        self.vite_entry_points = {
+            Path(entry).stem: entry for entry in vite_entry_points
+        }
 
         if app is not None:
             self.init_app(app, vite_routes_host=vite_routes_host)
@@ -48,6 +60,8 @@ class Vite:
 
         vite_folder_path = config.get("VITE_FOLDER_PATH", "vite")
         self.vite_folder_path = vite_folder_path
+
+        config.setdefault("VITE_STATIC_TAG", False)
 
         if config.get("VITE_AUTO_INSERT", False):
             app.after_request(self.after_request)

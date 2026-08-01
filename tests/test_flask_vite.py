@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 """Tests for `flask_vite` package."""
+
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from flask import Flask
 from werkzeug import Response
 
 from flask_vite import Vite, cli
-from flask_vite.extension import ViteError
+from flask_vite.extension import ViteError  # re-exported; canonical home is .errors
 from flask_vite.npm import NPMError
 
 
@@ -64,21 +65,148 @@ def test_npm_alt_path():
 def test_vite_auto_inject(mocker):
     app = Flask(__name__)
     app.config["VITE_AUTO_INSERT"] = True
-    Vite(app)
+    app.config["VITE_STATIC_TAG"] = True
+    Vite(app, vite_entry_points=["main.js"])
 
     @app.route("/")
     def index():
         return "<html><head></head><body>OK</body></html>"
 
-    mocker.patch("glob.glob", return_value=["path/to/file"])
+    mocker.patch("glob.glob", return_value=["path/to/main-abc123.js"])
     with (
         app.test_client() as client,
         app.app_context(),
     ):
         response = client.get("/")
 
-        assert '<script type="module" src="/_vite/file">' in response.text
-        assert '<link rel="stylesheet" href="/_vite/file">' in response.text
+        assert "<script type='module' src='/_vite/main-abc123.js'>" in response.text
+
+
+ENTRY_POINTS = ["reactIslands.tsx", "csvParse.ts", "csv.ts"]
+BUILT_ASSETS = [
+    "vite/dist/assets/reactIslands-AAA111.js",
+    "vite/dist/assets/csvParse-BBB222.js",
+    "vite/dist/assets/csv-CCC333.js",
+    "vite/dist/assets/vendor-react-DDD444.js",
+]
+
+
+def make_app(**config):
+    app = Flask(__name__)
+    app.config.update(config)
+    Vite(app, vite_entry_points=ENTRY_POINTS)
+    return app
+
+
+def test_entry_points_are_keyed_by_name():
+    app = make_app()
+    assert app.extensions["vite"].vite_entry_points == {
+        "reactIslands": "reactIslands.tsx",
+        "csvParse": "csvParse.ts",
+        "csv": "csv.ts",
+    }
+
+
+def test_static_tag_defaults_to_every_entry_point(mocker):
+    app = make_app(VITE_STATIC_TAG=True)
+    mocker.patch("glob.glob", return_value=BUILT_ASSETS)
+
+    with app.test_request_context():
+        tag = app.jinja_env.globals["vite_tags"]()
+
+    assert "/_vite/reactIslands-AAA111.js" in tag
+    assert "/_vite/csvParse-BBB222.js" in tag
+    assert "/_vite/csv-CCC333.js" in tag
+
+
+def test_static_tag_emits_only_the_named_entry_point(mocker):
+    app = make_app(VITE_STATIC_TAG=True)
+    mocker.patch("glob.glob", return_value=BUILT_ASSETS)
+
+    with app.test_request_context():
+        tag = app.jinja_env.globals["vite_tags"]("reactIslands")
+
+    assert "/_vite/reactIslands-AAA111.js" in tag
+    assert "csvParse" not in tag
+    assert tag.count("<script") == 1
+
+
+def test_static_tag_does_not_prefix_match_other_entry_points(mocker):
+    """`csv` must not pull in `csvParse`, which the old startswith() check did."""
+    app = make_app(VITE_STATIC_TAG=True)
+    mocker.patch("glob.glob", return_value=BUILT_ASSETS)
+
+    with app.test_request_context():
+        tag = app.jinja_env.globals["vite_tags"]("csv")
+
+    assert "/_vite/csv-CCC333.js" in tag
+    assert "csvParse" not in tag
+
+
+def test_static_tag_excludes_shared_chunks(mocker):
+    """Vendor chunks are imported by the entry module, not tagged separately."""
+    app = make_app(VITE_STATIC_TAG=True)
+    mocker.patch("glob.glob", return_value=BUILT_ASSETS)
+
+    with app.test_request_context():
+        tag = app.jinja_env.globals["vite_tags"]()
+
+    assert "vendor-react" not in tag
+
+
+def test_static_tag_preserves_requested_order_and_dedupes(mocker):
+    app = make_app(VITE_STATIC_TAG=True)
+    mocker.patch("glob.glob", return_value=BUILT_ASSETS)
+
+    with app.test_request_context():
+        tag = app.jinja_env.globals["vite_tags"]("csvParse", "reactIslands", "csvParse")
+
+    assert tag.count("<script") == len(["csvParse", "reactIslands"])
+    assert tag.index("csvParse-BBB222") < tag.index("reactIslands-AAA111")
+
+
+def test_static_tag_raises_when_an_entry_point_was_never_built(mocker):
+    app = make_app(VITE_STATIC_TAG=True)
+    mocker.patch("glob.glob", return_value=[])
+
+    with app.test_request_context(), pytest.raises(ViteError) as e:
+        app.jinja_env.globals["vite_tags"]("reactIslands")
+
+    assert "No built asset found for vite entry point 'reactIslands'" in str(e.value)
+
+
+def test_unknown_entry_point_raises():
+    app = make_app(VITE_STATIC_TAG=True)
+
+    with app.test_request_context(), pytest.raises(ViteError) as e:
+        app.jinja_env.globals["vite_tags"]("nope")
+
+    assert "Unknown vite entry point(s): nope" in str(e.value)
+
+
+def test_debug_tag_points_at_the_dev_server_sources():
+    app = make_app(VITE_STATIC_TAG=False)
+
+    with app.test_request_context():
+        tag = app.jinja_env.globals["vite_tags"]("reactIslands")
+
+    assert "http://localhost:5173/src/reactIslands.tsx" in tag
+    assert "@vite/client" in tag
+    assert "csvParse" not in tag
+
+
+def test_debug_tag_emits_the_refresh_preamble_once_per_request():
+    app = make_app(VITE_STATIC_TAG=False)
+
+    with app.test_request_context():
+        vite_tags = app.jinja_env.globals["vite_tags"]
+        first = vite_tags("reactIslands")
+        second = vite_tags("csvParse")
+
+    assert first.count("@react-refresh") == 1
+    assert second.count("@react-refresh") == 0
+    # The entry point script itself is still emitted on the second call.
+    assert "/src/csvParse.ts" in second
 
 
 def test_vite_and_flask_host_mismatch():
@@ -125,13 +253,14 @@ def test_vite_host_variables_rejected():
 def test_vite_auto_inject_explicit_host(mocker):
     app = Flask(__name__, host_matching=True, static_host="static.domain.com")
     app.config["VITE_AUTO_INSERT"] = True
-    Vite(app, vite_routes_host="vite.domain.com")
+    app.config["VITE_STATIC_TAG"] = True
+    Vite(app, vite_routes_host="vite.domain.com", vite_entry_points=["main.js"])
 
     @app.route("/", host="myapp.com")
     def index():
         return "<html><head></head><body>OK</body></html>"
 
-    mocker.patch("glob.glob", return_value=["path/to/file"])
+    mocker.patch("glob.glob", return_value=["path/to/main-abc123.js"])
     with (
         app.test_client() as client,
         app.app_context(),
@@ -139,32 +268,28 @@ def test_vite_auto_inject_explicit_host(mocker):
         response = client.get("/", headers={"Host": "myapp.com"})
 
         assert (
-            '<script type="module" src="http://vite.domain.com/_vite/file">'
-            in response.text
-        )
-        assert (
-            '<link rel="stylesheet" href="http://vite.domain.com/_vite/file">'
-            in response.text
+            "<script type='module' "
+            "src='http://vite.domain.com/_vite/main-abc123.js'>" in response.text
         )
 
 
 def test_vite_auto_inject_match_request_host(mocker):
     app = Flask(__name__, host_matching=True, static_host="static.domain.com")
     app.config["VITE_AUTO_INSERT"] = True
-    Vite(app, vite_routes_host="*")
+    app.config["VITE_STATIC_TAG"] = True
+    Vite(app, vite_routes_host="*", vite_entry_points=["main.js"])
 
     @app.route("/", host="myapp.com")
     def index():
         return "<html><head></head><body>OK</body></html>"
 
-    mocker.patch("glob.glob", return_value=["path/to/file"])
+    mocker.patch("glob.glob", return_value=["path/to/main-abc123.js"])
     with (
         app.test_client() as client,
         app.app_context(),
     ):
         response = client.get("/", headers={"Host": "myapp.com"})
-        assert '<script type="module" src="/_vite/file">' in response.text
-        assert '<link rel="stylesheet" href="/_vite/file">' in response.text
+        assert "<script type='module' src='/_vite/main-abc123.js'>" in response.text
 
 
 @pytest.mark.parametrize(
